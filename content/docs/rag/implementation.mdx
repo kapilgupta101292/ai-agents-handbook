@@ -1,0 +1,353 @@
+import { Callout, Steps, Tabs } from 'nextra/components'
+
+# RAG Implementation Guide
+
+A step-by-step guide to building your first RAG system.
+
+## Prerequisites
+
+- Python 3.8+
+- Basic understanding of APIs
+- API keys for LLM (OpenAI, Anthropic, etc.)
+
+## Quick Start
+
+<Steps>
+### Install Dependencies
+
+```bash
+pip install langchain openai numpy tiktoken
+pip install chromadb  # Or your preferred vector store
+```
+
+### Create Your First RAG System
+
+```python
+from langchain.document_loaders import TextLoader
+from langchain.text_splitter import CharacterTextSplitter
+from langchain.embeddings import OpenAIEmbeddings
+from langchain.vectorstores import Chroma
+from langchain.chat_models import ChatOpenAI
+from langchain.chains import RetrievalQA
+
+# 1. Load documents
+loader = TextLoader("document.txt")
+documents = loader.load()
+
+# 2. Split into chunks
+splitter = CharacterTextSplitter(
+    chunk_size=1000,
+    chunk_overlap=200
+)
+chunks = splitter.split_documents(documents)
+
+# 3. Create embeddings
+embeddings = OpenAIEmbeddings()
+
+# 4. Create vector store
+vectorstore = Chroma.from_documents(
+    chunks,
+    embeddings
+)
+
+# 5. Create RAG chain
+llm = ChatOpenAI(model_name="gpt-3.5-turbo")
+qa = RetrievalQA.from_chain_type(
+    llm=llm,
+    chain_type="stuff",
+    retriever=vectorstore.as_retriever()
+)
+
+# 6. Query!
+result = qa.run("What is the main topic?")
+print(result)
+```
+
+### Store and Reuse
+
+```python
+# Save vector store
+vectorstore.persist()
+
+# Load later
+vectorstore = Chroma(
+    persist_directory="./chroma_db",
+    embedding_function=embeddings
+)
+```
+</Steps>
+
+## Detailed Implementation
+
+### Option 1: Using LangChain
+
+LangChain is the easiest way to build RAG systems.
+
+```python
+from langchain.document_loaders import PyPDFLoader
+from langchain.text_splitter import RecursiveCharacterTextSplitter
+from langchain.embeddings import OpenAIEmbeddings
+from langchain.vectorstores import Pinecone
+from langchain.chat_models import ChatOpenAI
+from langchain.chains.qa_with_sources import load_qa_with_sources_chain
+
+# Load PDF
+loader = PyPDFLoader("research_paper.pdf")
+pages = loader.load()
+
+# Split smarter
+splitter = RecursiveCharacterTextSplitter(
+    chunk_size=1500,
+    chunk_overlap=300,
+    separators=["\n\n", "\n", ".", " "]
+)
+chunks = splitter.split_documents(pages)
+
+# Add metadata
+for i, chunk in enumerate(chunks):
+    chunk.metadata["chunk_id"] = i
+
+# Embed and store
+embeddings = OpenAIEmbeddings(model="text-embedding-3-small")
+vectorstore = Pinecone.from_documents(
+    chunks,
+    embeddings,
+    index_name="my-index"
+)
+
+# Create QA chain with sources
+llm = ChatOpenAI(model="gpt-4-turbo")
+qa_chain = load_qa_with_sources_chain(llm)
+
+# Retrieve and answer
+docs = vectorstore.similarity_search(
+    "What are the main findings?",
+    k=4
+)
+
+result = qa_chain(
+    {
+        "input_documents": docs,
+        "question": "What are the main findings?"
+    }
+)
+
+print(result["output_text"])
+```
+
+### Option 2: Using LLamaIndex
+
+Great for document indexing and querying.
+
+```python
+from llama_index.core import SimpleDirectoryReader, VectorStoreIndex
+from llama_index.core.settings import Settings
+from llama_index.llms.openai import OpenAI
+
+# Load documents from directory
+documents = SimpleDirectoryReader("./data").load_data()
+
+# Configure LLM
+Settings.llm = OpenAI(model="gpt-4")
+
+# Create index (automatic embedding)
+index = VectorStoreIndex.from_documents(documents)
+
+# Query
+query_engine = index.as_query_engine(similarity_top_k=4)
+response = query_engine.query("What are the key points?")
+print(response)
+
+# With source citations
+for node in response.source_nodes:
+    print(f"Score: {node.score}, Content: {node.text}")
+```
+
+### Option 3: Manual Implementation
+
+For more control, implement from scratch.
+
+```python
+import openai
+import numpy as np
+from sklearn.metrics.pairwise import cosine_similarity
+import json
+
+class SimpleRAG:
+    def __init__(self, api_key):
+        self.api_key = api_key
+        self.documents = []
+        self.embeddings = []
+    
+    def add_documents(self, texts, metadata=None):
+        """Add documents to the knowledge base"""
+        for text in texts:
+            embedding = self._embed(text)
+            self.embeddings.append(embedding)
+            self.documents.append({
+                "text": text,
+                "metadata": metadata or {}
+            })
+    
+    def _embed(self, text):
+        """Create embedding for text"""
+        response = openai.Embedding.create(
+            input=text,
+            model="text-embedding-3-small"
+        )
+        return response['data'][0]['embedding']
+    
+    def retrieve(self, query, top_k=4):
+        """Retrieve relevant documents"""
+        query_embedding = self._embed(query)
+        
+        # Calculate similarities
+        similarities = cosine_similarity(
+            [query_embedding],
+            self.embeddings
+        )[0]
+        
+        # Get top-k
+        top_indices = np.argsort(similarities)[-top_k:][::-1]
+        
+        return [self.documents[i] for i in top_indices]
+    
+    def generate_response(self, query):
+        """Generate response using RAG"""
+        # Retrieve relevant documents
+        docs = self.retrieve(query, top_k=4)
+        
+        # Build context
+        context = "\n\n".join([d["text"] for d in docs])
+        
+        # Create prompt
+        messages = [
+            {"role": "system", "content": "Answer using provided context."},
+            {"role": "user", "content": f"""
+Context:
+{context}
+
+Question: {query}
+
+Answer based on context:
+"""}
+        ]
+        
+        # Generate
+        response = openai.ChatCompletion.create(
+            model="gpt-3.5-turbo",
+            messages=messages,
+            temperature=0.3
+        )
+        
+        return response['choices'][0]['message']['content']
+
+# Usage
+rag = SimpleRAG(api_key="your-key")
+rag.add_documents([
+    "AI agents are autonomous systems...",
+    "RAG improves accuracy by using retrieval..."
+])
+response = rag.generate_response("What is RAG?")
+print(response)
+```
+
+## Production Considerations
+
+### Caching
+
+```python
+from functools import lru_cache
+
+@lru_cache(maxsize=1000)
+def get_embedding(text):
+    """Cache embeddings to reduce API calls"""
+    return embed_model.embed(text)
+```
+
+### Error Handling
+
+```python
+try:
+    result = qa.run("user query")
+except Exception as e:
+    fallback = "I couldn't find the answer."
+    return fallback
+```
+
+### Monitoring
+
+```python
+import logging
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+logger.info(f"Query: {query}")
+logger.info(f"Retrieved docs: {len(docs)}")
+logger.info(f"Response latency: {elapsed_time}s")
+```
+
+### Rate Limiting
+
+```python
+from ratelimit import limits, sleep_and_retry
+
+@sleep_and_retry
+@limits(calls=100, period=60)
+def call_embedding_api(text):
+    return embeddings.embed(text)
+```
+
+<Callout type="info">
+For production, always implement proper error handling, logging, and monitoring.
+</Callout>
+
+## Common Patterns
+
+### QA with Sources
+
+Track which documents informed the answer.
+
+```python
+qa_chain = load_qa_with_sources_chain(llm)
+# Returns answer + source documents
+```
+
+### Chat with History
+
+Maintain conversation context.
+
+```python
+from langchain.memory import ConversationBufferMemory
+
+memory = ConversationBufferMemory()
+qa = ConversationalRetrievalQA.from_llm(
+    llm,
+    vectorstore.as_retriever(),
+    memory=memory
+)
+```
+
+### Multi-Stage Retrieval
+
+Retrieve, then rerank.
+
+```python
+# Initial retrieval
+initial_docs = vectorstore.similarity_search(query, k=10)
+
+# Rerank with cross-encoder
+from sentence_transformers import CrossEncoder
+reranker = CrossEncoder('cross-encoder/qnli-distilroberta-base')
+scores = reranker.predict([[query, d.page_content] for d in initial_docs])
+final_docs = [d for _, d in sorted(zip(scores, initial_docs), reverse=True)][:4]
+```
+
+## Deployment Options
+
+- **Langchain APIs**: Hosted solution
+- **Modal**: Serverless deployment
+- **AWS Lambda**: Event-based
+- **Docker**: Container-based
+- **Streamlit**: Quick web app

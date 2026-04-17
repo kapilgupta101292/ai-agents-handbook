@@ -1,0 +1,68 @@
+import { Steps, Callout } from 'nextra/components'
+
+# Setting up Nextra
+
+A complete guide to setting up your Nextra blog.
+
+<Steps>
+### Install Dependencies
+
+```bash
+npm install nextra nextra-theme-docs
+npm install next react react-dom
+```
+
+### Configure Next.js
+
+Update `next.config.ts`:
+
+```tsx
+import nextra from 'nextra'
+
+const withNextra = nextra({
+  theme: 'nextra-theme-docs',
+  themeConfig: './theme.config.tsx'
+})
+
+export default withNextra({})
+```
+
+### Setup Root Layout
+
+Create `app/layout.tsx`:
+
+```tsx
+import { Layout } from 'nextra-theme-docs'
+import 'nextra-theme-docs/style.css'
+
+export default function RootLayout({ children }) {
+  return (
+    <html>
+      <body>
+        <Layout>{children}</Layout>
+      </body>
+    </html>
+  )
+}
+```
+
+### Create Content
+
+Add MDX files in the `pages/` directory.
+
+### Customize Theme
+
+Edit `theme.config.tsx` to customize your blog's appearance.
+
+### Run Development Server
+
+```bash
+npm run dev
+```
+
+Visit `http://localhost:3000` to see your blog!
+</Steps>
+
+<Callout type="success">
+  You now have a fully functional Nextra blog ready for content!
+</Callout>

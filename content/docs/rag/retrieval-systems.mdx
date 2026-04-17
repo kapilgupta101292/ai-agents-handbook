@@ -1,0 +1,214 @@
+import { Callout, Steps } from 'nextra/components'
+
+# Retrieval Systems
+
+The retrieval component is critical to RAG performance. This guide covers different retrieval approaches and how to choose between them.
+
+## Retrieval Methods
+
+### 1. Dense Retrieval (Semantic Search)
+
+Uses embedding vectors to find semantically similar documents.
+
+**How it works:**
+- Query and documents are embedded into the same vector space
+- Distance/similarity computed between vectors
+- Top-k most similar documents returned
+
+**Advantages:**
+- Captures semantic meaning
+- Works across languages and paraphrasing
+- Fast with proper indexing
+
+**Disadvantages:**
+- Requires good embedding model
+- May miss exact keyword matches
+- Embedding costs
+
+**Best for:**
+- Semantic understanding
+- Cross-lingual queries
+- Conceptual searches
+
+### 2. Sparse Retrieval (BM25)
+
+Traditional keyword-based full-text search.
+
+**How it works:**
+- Inverted index of terms
+- TF-IDF scoring
+- Keyword matching
+
+**Advantages:**
+- Fast and lightweight
+- Handles exact matches well
+- Transparent and interpretable
+
+**Disadvantages:**
+- No semantic understanding
+- Vocabulary mismatch issues
+- Less robust to paraphrasing
+
+**Best for:**
+- Exact keyword searches
+- Structured documents
+- Low-resource environments
+
+### 3. Hybrid Retrieval
+
+Combines dense and sparse retrieval.
+
+**How it works:**
+- Run both dense and sparse search
+- Combine results (e.g., reciprocal rank fusion)
+- Return merged top-k
+
+**Advantages:**
+- Best of both worlds
+- Handles various query types
+- More robust
+
+**Disadvantages:**
+- Slower (runs two searches)
+- More complex to tune
+
+**Best for:**
+- Production systems
+- Mixed workloads
+- High accuracy requirements
+
+### 4. Graph-Based Retrieval
+
+Uses knowledge graphs or document relationships.
+
+**How it works:**
+- Build graph of entities and relationships
+- Traverse graph based on query
+- Return relevant subgraph
+
+**Advantages:**
+- Captures relationships
+- Structured knowledge
+- Reasoning over facts
+
+**Disadvantages:**
+- Complex to build
+- Requires structured data
+- Higher setup cost
+
+**Best for:**
+- Knowledge bases
+- Entity-centric queries
+- Complex reasoning
+
+## Chunking Strategies
+
+How you split documents significantly impacts retrieval quality.
+
+### Fixed-Size Chunks
+
+Split documents into fixed-length pieces (e.g., 512 tokens).
+
+```python
+chunks = [doc[i:i+512] for i in range(0, len(doc), 512)]
+```
+
+**Pros:** Simple, fast  
+**Cons:** Splits context awkwardly
+
+### Semantic Chunking
+
+Split at semantic boundaries (paragraphs, sentences).
+
+```python
+# Split at sentence boundaries
+chunks = doc.split('. ')
+```
+
+**Pros:** Preserves context, natural boundaries  
+**Cons:** Variable chunk sizes
+
+### Sliding Window
+
+Overlap chunks for context continuity.
+
+```python
+# 512 token chunks with 50 token overlap
+chunks = [doc[i:i+512] for i in range(0, len(doc), 462)]
+```
+
+**Pros:** Maintains context between chunks  
+**Cons:** Redundancy, increased storage
+
+### Recursive Chunking
+
+Split hierarchically (paragraphs → sentences → tokens).
+
+**Pros:** Optimal chunk sizes, preserves structure  
+**Cons:** More complex
+
+## Embedding Models
+
+The embedding model determines retrieval quality.
+
+| Model | Dimensions | Speed | Quality |
+|-------|-----------|-------|---------|
+| `text-embedding-3-small` | 1536 | Very Fast | Excellent |
+| `text-embedding-3-large` | 3072 | Fast | Excellent |
+| `all-MiniLM-L6-v2` | 384 | Very Fast | Good |
+| `bge-base-en-v1.5` | 768 | Fast | Very Good |
+| `e5-large` | 1024 | Medium | Excellent |
+
+<Callout type="tip">
+Start with `all-MiniLM-L6-v2` for prototyping (fast, local), then upgrade to `text-embedding-3-small` for production (better quality).
+</Callout>
+
+## Retrieval Metrics
+
+### Standard Metrics
+
+- **Precision@k**: How many of top-k results are relevant
+- **Recall@k**: What fraction of relevant documents are in top-k
+- **MRR (Mean Reciprocal Rank)**: Average rank of first relevant result
+- **NDCG**: Normalized Discounted Cumulative Gain
+
+### RAG-Specific Metrics
+
+- **Context Relevance**: Is retrieved context related to query?
+- **Faithfulness**: Is response supported by retrieved context?
+- **Answer Relevance**: Does response answer the actual question?
+
+## Improving Retrieval
+
+<Steps>
+### Start Simple
+Begin with dense retrieval (semantic search) and measure performance.
+
+### Add Metadata Filtering
+Filter results by date, source, category before ranking.
+
+### Try Hybrid Search
+Combine dense + sparse retrieval, use reciprocal rank fusion.
+
+### Implement Reranking
+Use cross-encoders to rerank top results.
+
+### Expand Queries
+Generate multiple query variants, retrieve from all.
+
+### Fine-tune Embeddings
+Fine-tune embedding model on your domain.
+
+### Evaluate Thoroughly
+Track metrics, analyze failures, iterate.
+</Steps>
+
+## Common Pitfalls
+
+<Callout type="warning">
+- **Too Large Chunks**: Dilutes signal with noise
+- **Too Small Chunks**: Breaks up important context
+- **Poor Embeddings**: Garbage in, garbage out
+- **No Evaluation**: Flying blind
+- **Ignoring Metadata**: Missing filtering opportunities
+</Callout>

@@ -1,0 +1,308 @@
+import { Callout } from 'nextra/components'
+
+# RAG Best Practices
+
+Proven strategies for building effective RAG systems.
+
+## Document Preparation
+
+### 1. Quality Over Quantity
+
+A smaller set of high-quality documents beats a massive noisy dataset.
+
+- Remove duplicates and near-duplicates
+- Filter out low-quality or irrelevant content
+- Validate sources
+- Remove personally identifiable information
+
+### 2. Proper Chunking
+
+The right chunk size is critical:
+
+- **Too small** (< 256 tokens): Loses context
+- **Too large** (> 2000 tokens): Dilutes signal with noise
+- **Sweet spot**: 512-1024 tokens with 100-200 token overlap
+
+```python
+from langchain.text_splitter import RecursiveCharacterTextSplitter
+
+splitter = RecursiveCharacterTextSplitter(
+    chunk_size=1024,
+    chunk_overlap=128,
+    separators=["\n\n", "\n", ".", " "]  # Respect document structure
+)
+```
+
+### 3. Rich Metadata
+
+Add contextual metadata to chunks:
+
+```python
+chunk.metadata = {
+    "source": "product_manual.pdf",
+    "chapter": "Installation",
+    "version": "2.0",
+    "date": "2024-01-15",
+    "type": "tutorial"
+}
+```
+
+Benefits:
+- Filter results by date, type, or source
+- Better context in responses
+- Improved retrieval precision
+
+### 4. Preprocessing
+
+```python
+def preprocess_text(text):
+    # Remove extra whitespace
+    text = " ".join(text.split())
+    # Remove URLs
+    text = re.sub(r'http\S+', '', text)
+    # Remove special characters but keep structure
+    text = re.sub(r'[^\w\s.,!?-]', '', text)
+    return text
+```
+
+## Retrieval Optimization
+
+### 1. Hybrid Search
+
+Combine dense and sparse retrieval:
+
+```python
+# Dense (semantic)
+dense_results = vectorstore.similarity_search(query, k=10)
+
+# Sparse (keyword)
+sparse_results = bm25.retrieve(query, k=10)
+
+# Combine
+combined = combine_results(dense_results, sparse_results)
+```
+
+<Callout type="tip">
+Hybrid search typically improves recall by 10-20% with minimal latency increase.
+</Callout>
+
+### 2. Reranking
+
+Use cross-encoders to improve precision:
+
+```python
+from sentence_transformers import CrossEncoder
+
+reranker = CrossEncoder('cross-encoder/mmarco-mMiniLMv2-L12-H384-v1')
+
+# Get initial candidates
+candidates = retriever.retrieve(query, k=20)
+
+# Rerank
+scores = reranker.predict([
+    [query, doc.page_content] for doc in candidates
+])
+
+# Keep top-k
+ranked_docs = [d for _, d in sorted(
+    zip(scores, candidates),
+    reverse=True
+)][:5]
+```
+
+### 3. Query Expansion
+
+Generate multiple query variants:
+
+```python
+def expand_query(query):
+    """Generate related queries"""
+    variants = [
+        query,  # Original
+        paraphrase(query),  # Rephrase
+        break_into_questions(query),  # Sub-questions
+        add_synonyms(query)  # With synonyms
+    ]
+    return variants
+
+# Retrieve from all variants
+all_results = []
+for variant in expand_query(query):
+    all_results.extend(vectorstore.search(variant, k=5))
+
+# Deduplicate and rank
+final_docs = deduplicate_and_rank(all_results)
+```
+
+## Prompt Engineering
+
+### 1. Clear Instructions
+
+```python
+system = """You are a helpful assistant. Use the provided context 
+to answer the user's question. Follow these rules:
+
+1. Only use information from the context
+2. If the answer isn't in the context, say "I don't know"
+3. Always cite which document you're using
+4. Be concise and clear"""
+```
+
+### 2. Few-Shot Examples
+
+```python
+examples = [
+    {
+        "context": "The Earth orbits the Sun...",
+        "question": "What does Earth orbit?",
+        "answer": "According to the document, Earth orbits the Sun."
+    },
+    {
+        "context": "Photosynthesis is the process...",
+        "question": "How do plants make food?",
+        "answer": "The document explains that plants use photosynthesis..."
+    }
+]
+```
+
+### 3. Structured Output
+
+```python
+prompt = """Based on the context, provide:
+
+1. Direct Answer: [1-2 sentences]
+2. Supporting Evidence: [key facts from context]
+3. Source Document: [which document this comes from]
+4. Confidence: [high/medium/low]
+
+Context:
+{context}
+
+Question: {question}"""
+```
+
+## Quality Assurance
+
+### 1. Evaluation Metrics
+
+Track these metrics in production:
+
+| Metric | Target | How |
+|--------|--------|-----|
+| Context Relevance | > 0.8 | LLM evaluates retrieved context |
+| Answer Faithfulness | > 0.85 | Response uses only context info |
+| Answer Relevance | > 0.9 | Response answers the question |
+| Latency | < 2s | Track p95 response time |
+
+### 2. User Feedback
+
+```python
+# Ask users to rate responses
+response = {
+    "answer": "...",
+    "feedback_url": "/api/feedback?id={query_id}"
+}
+
+# Store feedback for improvement
+def log_feedback(query_id, rating, comment):
+    db.save({
+        "query_id": query_id,
+        "rating": rating,
+        "comment": comment,
+        "timestamp": now()
+    })
+```
+
+### 3. Continuous Testing
+
+```python
+# Test set of known Q&A pairs
+test_cases = [
+    {"query": "What is RAG?", "expected": "Retrieval-Augmented Generation..."},
+    {"query": "How does it work?", "expected": "It retrieves documents and..."}
+]
+
+for test in test_cases:
+    result = rag.query(test["query"])
+    score = evaluate_similarity(result, test["expected"])
+    assert score > 0.7, f"Test failed: {test['query']}"
+```
+
+## Performance Optimization
+
+| Strategy | Description |
+|----------|-------------|
+| **Caching** | Cache embeddings and frequent queries to reduce latency |
+| **Batching** | Process multiple queries together for better throughput |
+| **Indexing** | Use proper database indices for faster retrieval |
+| **Compression** | Compress stored embeddings to reduce memory |
+| **Async** | Use async/await for I/O-bound operations |
+| **CDN** | Distribute vector database geographically |
+
+## Common Pitfalls to Avoid
+
+<Callout type="warning">
+**Don't:**
+- Use massive chunks that dilute signal
+- Ignore document quality
+- Forget to add metadata
+- Use outdated embedding models
+- Skip evaluation and testing
+- Deploy without monitoring
+- Trust single retrieval method
+- Forget to update knowledge base
+</Callout>
+
+**Do:**
+- ✅ Start simple, iterate
+- ✅ Measure everything
+- ✅ Use multiple retrieval methods
+- ✅ Add monitoring and logging
+- ✅ Get user feedback
+- ✅ Version your documents and models
+- ✅ Have a fallback strategy
+- ✅ Regularly audit results
+
+## Security Considerations
+
+### 1. Input Validation
+
+```python
+def sanitize_query(query):
+    # Prevent prompt injection
+    if len(query) > 500:
+        return None
+    if contains_dangerous_chars(query):
+        return None
+    return query.strip()
+```
+
+### 2. Output Validation
+
+```python
+def validate_response(response):
+    # Ensure response is grounded in context
+    citations = extract_citations(response)
+    for citation in citations:
+        if citation not in retrieved_docs:
+            flag_for_review(response)
+```
+
+### 3. Access Control
+
+```python
+# Only allow access to relevant documents
+def filter_by_user_permissions(docs, user_id):
+    return [d for d in docs if user_has_access(user_id, d.source)]
+```
+
+## Monitoring Checklist
+
+- [ ] Track query volume and latency
+- [ ] Monitor retrieval quality (precision, recall)
+- [ ] Log failed queries for analysis
+- [ ] Track embedding costs
+- [ ] Monitor vector store size and growth
+- [ ] Regular evaluation against test cases
+- [ ] User feedback analysis
+- [ ] Document freshness (when was last update?)

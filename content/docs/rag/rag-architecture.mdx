@@ -1,0 +1,186 @@
+import { Callout, Tabs } from 'nextra/components'
+
+# RAG Architecture
+
+Understanding the architecture of a RAG system is crucial for implementing one effectively.
+
+## System Overview
+
+A complete RAG system consists of several interconnected components:
+
+```
+┌─────────────────────────────────────────┐
+│         Knowledge Base Setup            │
+│  (Documents → Chunks → Embeddings)      │
+│         Vector Store / Index            │
+└─────────────────────────────────────────┘
+              ↑
+    ┌─────────┴─────────┐
+    │                   │
+┌───▼──────────┐  ┌──────▼─────────┐
+│  Retrieval   │  │  Reranking    │
+│   Engine     │  │   (Optional)  │
+└───┬──────────┘  └──────┬─────────┘
+    │                   │
+    └─────────┬─────────┘
+              ↓
+    ┌─────────────────────┐
+    │  Prompt Engineer    │
+    │  (Context Assembly) │
+    └─────────┬───────────┘
+              ↓
+    ┌─────────────────────┐
+    │  Language Model     │
+    │  (Generation)       │
+    └─────────┬───────────┘
+              ↓
+    ┌─────────────────────┐
+    │  Post-Processing    │
+    │  (Formatting, etc)  │
+    └─────────┬───────────┘
+              ↓
+          Response
+
+```
+
+## Detailed Components
+
+### 1. Document Processing
+
+Prepares raw documents for retrieval:
+
+- **Chunking**: Break documents into manageable pieces (typically 200-1000 tokens)
+- **Cleaning**: Remove noise, format text, extract metadata
+- **Metadata Addition**: Include source, date, category, etc.
+- **Deduplication**: Remove duplicate content
+
+### 2. Embedding Generation
+
+Converts text into numerical vectors:
+
+- **Embedding Model**: Uses models like `text-embedding-3-small` or `all-MiniLM-L6-v2`
+- **Dimensionality**: Typically 384-3072 dimensions
+- **Similarity**: Enables semantic search in vector space
+
+### 3. Vector Store / Index
+
+Stores and retrieves embeddings efficiently:
+
+Popular options:
+- **Pinecone**: Managed vector database
+- **Weaviate**: Open-source vector database
+- **FAISS**: Facebook's fast similarity search
+- **Milvus**: Cloud-native vector database
+- **Elasticsearch**: Full-text + vector search
+- **PostgreSQL with pgvector**: SQL + vectors
+
+### 4. Retrieval Engine
+
+Finds relevant documents for a query:
+
+<Tabs items={['Semantic Search', 'Hybrid Search', 'BM25']}>
+  <Tabs.Tab>
+    **Semantic Search**
+    - Embed the query in the same space as documents
+    - Find k-nearest neighbors
+    - Scores based on vector similarity
+    - Best for semantic understanding
+  </Tabs.Tab>
+  <Tabs.Tab>
+    **Hybrid Search**
+    - Combines semantic + keyword search
+    - Leverages both dense and sparse retrieval
+    - Better for mixed workloads
+    - More robust across domains
+  </Tabs.Tab>
+  <Tabs.Tab>
+    **BM25**
+    - Traditional keyword-based search
+    - TF-IDF variant
+    - Good baseline
+    - Fast and interpretable
+  </Tabs.Tab>
+</Tabs>
+
+### 5. Reranking (Optional)
+
+Improves retrieval quality:
+
+- Takes top-k results from retrieval
+- Re-scores using cross-encoder model
+- Filters out irrelevant results
+- Improves precision (but adds latency)
+
+### 6. Prompt Assembly
+
+Constructs the final prompt:
+
+```python
+system_prompt = """You are a helpful assistant.
+Use the provided context to answer questions.
+If you cannot find the answer in the context, say so."""
+
+user_prompt = f"""
+Context:
+{retrieved_context}
+
+Question: {user_query}
+
+Answer:"""
+```
+
+### 7. Language Model
+
+Generates the response:
+
+- Takes assembled prompt
+- Generates coherent, contextual answer
+- Can use various models (GPT-4, Claude, etc.)
+- Models can be different sizes depending on budget
+
+### 8. Post-Processing
+
+Refines the final output:
+
+- **Citation Extraction**: Link answers to source documents
+- **Format Validation**: Ensure output matches expected format
+- **Quality Checks**: Verify response quality
+- **Fallback Handling**: Handle edge cases
+
+## Common Architectural Patterns
+
+### Simple RAG
+```
+Query → Retrieve → Prompt → LLM → Response
+```
+Best for: Quick prototypes, simple use cases
+
+### Advanced RAG
+```
+Query → Multi-stage Retrieval → Reranking 
+→ Prompt Enhancement → LLM → Post-Processing → Response
+```
+Best for: Production systems, high accuracy needs
+
+### Iterative RAG
+```
+Query → Retrieve → Generate → Check Quality
+→ If low quality: Retrieve more / Refine → Generate → Response
+```
+Best for: Complex queries, multi-step reasoning
+
+<Callout type="info">
+The choice of architecture depends on your use case, latency requirements, and accuracy needs.
+</Callout>
+
+## Performance Considerations
+
+| Component | Impact | Cost |
+|-----------|--------|------|
+| Retrieval Quality | High | Low |
+| Model Size | High | High |
+| Reranking | Medium | Medium |
+| Context Length | Medium | High |
+| Embedding Quality | High | Medium |
+
+Focus on improving retrieval first—it's usually the biggest bottleneck.

@@ -1,0 +1,238 @@
+import { Callout, Tabs } from 'nextra/components'
+
+# Generation Models in RAG
+
+The language model that generates responses from retrieved context is crucial for RAG performance.
+
+## Model Selection Criteria
+
+When choosing a generation model for RAG, consider:
+
+- **Context Length**: How much context can the model handle?
+- **Quality**: Does it produce accurate, coherent responses?
+- **Speed**: Latency requirements for your application
+- **Cost**: Token pricing and inference costs
+- **Availability**: API availability and reliability
+- **Capabilities**: Does it support function calling, structured output, etc?
+
+## Popular Models for RAG
+
+<Tabs items={['Proprietary', 'Open Source', 'Specialized']}>
+  <Tabs.Tab>
+    ### Proprietary Models
+    
+    **GPT-4 Turbo**
+    - Context: 128K tokens
+    - Quality: Excellent reasoning
+    - Cost: $10-30 per M tokens
+    - Best for: High-accuracy requirements
+    
+    **Claude 3.5 Sonnet**
+    - Context: 200K tokens
+    - Quality: Excellent, balanced
+    - Cost: $3-15 per M tokens
+    - Best for: General purpose RAG
+    
+    **Gemini Pro**
+    - Context: 1M tokens (experimental)
+    - Quality: Very good
+    - Cost: Competitive
+    - Best for: Long documents
+    
+    **Llama 2/3 (via API)**
+    - Context: 4K-128K
+    - Quality: Good
+    - Cost: Low
+    - Best for: Cost-conscious projects
+  </Tabs.Tab>
+  
+  <Tabs.Tab>
+    ### Open Source Models
+    
+    **Llama 2 (7B-70B)**
+    - Self-hosted, free
+    - Quality: Decent for 7B, excellent for 70B
+    - Context: 4K tokens
+    - Best for: On-premise, budget
+    
+    **Mistral 7B**
+    - Efficient, fast
+    - Quality: Good despite small size
+    - Context: 32K tokens
+    - Best for: Speed, small deployments
+    
+    **Qwen**
+    - Multilingual
+    - Context: Up to 128K
+    - Quality: Excellent
+    - Best for: Non-English queries
+    
+    **Yi**
+    - Strong reasoning
+    - Context: 128K-200K
+    - Quality: Very good
+    - Best for: Complex reasoning
+  </Tabs.Tab>
+  
+  <Tabs.Tab>
+    ### Specialized Models
+    
+    **GPT-3.5 Turbo**
+    - Lightweight, fast
+    - Cost: Very cheap
+    - Best for: Simple queries, cost optimization
+    
+    **Phi-3**
+    - Lightweight (3-14B)
+    - Great for edge deployment
+    - Best for: Mobile, embedded systems
+    
+    **Domain-Specific Fine-tunes**
+    - Fine-tuned on specific domain
+    - Best for: Specialized applications
+  </Tabs.Tab>
+</Tabs>
+
+## Context Length Considerations
+
+Longer context windows allow more retrieved documents, but have tradeoffs:
+
+| Context Length | Advantage | Disadvantage |
+|---|---|---|
+| 4K | Fast, cheap | Limited context |
+| 8K-16K | Balanced | Standard |
+| 32K-128K | More context | Higher cost/latency |
+| 200K+ | Maximum context | Expensive, slower |
+
+<Callout type="info">
+For RAG, you typically don't need the longest context lengths. A 4K-8K window with good retrieval is often sufficient.
+</Callout>
+
+## Model-Specific Considerations
+
+### Instruction-Following
+
+Models fine-tuned for instructions work better with RAG:
+- Explicitly tell it to use context
+- Format instructions clearly
+- Provide examples
+
+### Hallucination Prevention
+
+RAG reduces hallucinations by providing context, but:
+- Instruct model to cite sources
+- Ask it to say "I don't know" if unsure
+- Fine-tune on grounded responses
+
+### Structured Output
+
+Some models support JSON/structured output:
+- Helpful for downstream processing
+- Enables validation
+- Easier integration with systems
+
+## Prompt Engineering for RAG
+
+### System Prompt
+
+```
+You are a helpful assistant that answers questions 
+using the provided context. Always cite your sources.
+If the context doesn't contain the answer, say so 
+rather than making up information.
+```
+
+### User Prompt Format
+
+```
+Context:
+{retrieved_context}
+
+Question: {user_query}
+
+Please provide a detailed answer based on the context above.
+If you use information from the context, cite the source.
+```
+
+### Best Practices
+
+- **Be explicit**: Tell the model to use the context
+- **Show examples**: Few-shot examples help
+- **Structure clearly**: Clear delimiters between sections
+- **Request citations**: Ask for source references
+- **Set expectations**: Define output format
+
+## Token Efficiency
+
+RAG typically uses 1-5 complete document chunks as context:
+
+```
+Input tokens:
+  System prompt: ~100 tokens
+  Context: ~1000-2000 tokens (2-5 chunks)
+  Query: ~50-100 tokens
+  Total: ~1200-2200 tokens
+
+Output tokens:
+  Typical response: 200-500 tokens
+```
+
+## Model Configuration
+
+Important parameters when calling the model:
+
+```python
+response = client.messages.create(
+    model="claude-3-sonnet-20240229",
+    max_tokens=1024,           # Limit output length
+    temperature=0.3,            # Lower = more consistent
+    top_p=0.9,                 # Nucleus sampling
+    system=system_prompt,
+    messages=[{"role": "user", "content": user_prompt}]
+)
+```
+
+**Temperature**: 
+- 0.0: Deterministic, focused
+- 0.5: Balanced
+- 1.0+: Creative, diverse
+
+Lower temperature is usually better for RAG (we want consistency).
+
+## Cost Optimization
+
+### Strategies
+
+1. **Use smaller models**: Claude 3.5 Haiku vs Opus
+2. **Limit context**: Only include relevant chunks
+3. **Cached prompts**: Cache system + context for repeated queries
+4. **Batch processing**: Process multiple queries together
+5. **Fine-tune small model**: Instead of using large model
+
+### Calculation
+
+```
+Cost per query = 
+  (input_tokens * input_price) + 
+  (output_tokens * output_price)
+
+For 2000 input tokens + 300 output tokens with Claude 3.5 Sonnet:
+  (2000 * $0.003/M) + (300 * $0.015/M) 
+  = $0.0060 + $0.0045 = $0.01 per query
+```
+
+<Callout type="tip">
+Prompt caching can reduce costs by 80-90% if you're making multiple queries with the same context.
+</Callout>
+
+## Evaluating Generation Quality
+
+Key metrics to track:
+
+- **Accuracy**: Does response match retrieved facts?
+- **Relevance**: Does it answer the actual question?
+- **Faithfulness**: Is it grounded in provided context?
+- **Readability**: Is it well-formatted and clear?
+- **Citation Quality**: Are sources cited correctly?
+
+Always evaluate against ground truth answers when possible.

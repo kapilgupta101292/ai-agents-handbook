@@ -1,0 +1,444 @@
+import { Callout, Tabs, Steps } from 'nextra/components'
+
+# Evaluation Methods for RAG
+
+Measuring RAG performance is critical for improving your system.
+
+## Evaluation Framework
+
+A complete RAG evaluation has three main components:
+
+```
+Query → [Retrieval] → [Generation] → Response
+         ↓              ↓              ↓
+      Context        Faithfulness   Relevance
+      Relevance
+```
+
+## Retrieval Evaluation
+
+### 1. Standard IR Metrics
+
+**Precision@k**: What fraction of top-k results are relevant?
+
+```
+Precision@5 = (relevant in top-5) / 5
+
+Example: Retrieved [A✓, B✗, C✓, D✓, E✗]
+Precision@5 = 3/5 = 0.6
+```
+
+**Recall@k**: What fraction of all relevant docs are in top-k?
+
+```
+Recall@5 = (relevant in top-5) / (total relevant)
+
+Example: 10 relevant docs total, 3 found in top-5
+Recall@5 = 3/10 = 0.3
+```
+
+**Mean Reciprocal Rank (MRR)**: Average position of first relevant result
+
+```
+MRR = 1/N * Σ(1 / rank of first relevant)
+
+Example: [B✗, A✓, C✓, D✗]
+MRR = 1/2 = 0.5
+```
+
+**NDCG (Normalized Discounted Cumulative Gain)**
+
+Considers both relevance and ranking position:
+
+```
+DCG = Σ(rel_i / log2(i+1))
+NDCG = DCG / ideal_DCG
+
+More sophisticated, accounts for relevance scores
+```
+
+### 2. Implementation
+
+```python
+from sklearn.metrics import precision_score, recall_score
+
+# Define ground truth
+queries = [
+    {
+        "query": "What is RAG?",
+        "relevant_docs": ["doc1", "doc3", "doc5"]
+    }
+]
+
+# Evaluate retrieval
+results = []
+for q in queries:
+    retrieved = retrieve(q["query"], k=5)
+    retrieved_ids = [d.id for d in retrieved]
+    
+    # Calculate metrics
+    relevant_set = set(q["relevant_docs"])
+    retrieved_set = set(retrieved_ids)
+    
+    tp = len(relevant_set & retrieved_set)
+    precision = tp / len(retrieved_set)
+    recall = tp / len(relevant_set)
+    
+    results.append({
+        "query": q["query"],
+        "precision": precision,
+        "recall": recall
+    })
+
+# Average across all queries
+avg_precision = sum(r["precision"] for r in results) / len(results)
+avg_recall = sum(r["recall"] for r in results) / len(results)
+
+print(f"Avg Precision: {avg_precision:.3f}")
+print(f"Avg Recall: {avg_recall:.3f}")
+```
+
+## Generation Evaluation
+
+### 1. Context Relevance
+
+Is the retrieved context actually relevant to the query?
+
+```python
+from langchain.evaluation import EvaluatorChain
+
+# Use LLM to evaluate relevance
+evaluator = EvaluatorChain(
+    criteria="The context directly addresses the query"
+)
+
+score = evaluator.evaluate_strings(
+    prediction=retrieved_context,
+    input=query
+)
+```
+
+### 2. Faithfulness
+
+Is the response grounded in the retrieved documents?
+
+```python
+def evaluate_faithfulness(response, context):
+    """Check if response uses only context information"""
+    
+    prompt = f"""
+Does the response only use information from the context?
+Consider these claims from the response:
+{extract_claims(response)}
+
+Context:
+{context}
+
+Rate faithfulness 0-1:
+"""
+    
+    rating = llm_evaluate(prompt)
+    return rating
+```
+
+### 3. Answer Relevance
+
+Does the response actually answer the question?
+
+```python
+def evaluate_answer_relevance(question, response):
+    """Check if response addresses the question"""
+    
+    prompt = f"""
+Question: {question}
+Response: {response}
+
+Does the response answer the question? (0-1):
+"""
+    
+    score = llm_evaluate(prompt)
+    return score
+```
+
+### 4. Automated Metrics
+
+<Tabs items={['BLEU', 'ROUGE', 'BERTScore']}>
+  <Tabs.Tab>
+    ### BLEU Score
+    
+    Measures overlap between generated and reference text.
+    
+    ```python
+    from nltk.translate.bleu_score import sentence_bleu
+    
+    reference = ["the cat is on the mat"]
+    candidate = "the cat is on the mat"
+    
+    score = sentence_bleu(
+        [reference.split()],
+        candidate.split()
+    )
+    # Returns 1.0 for perfect match
+    ```
+    
+    **Pros**: Fast, standard metric  
+    **Cons**: Doesn't capture semantic similarity
+  </Tabs.Tab>
+  
+  <Tabs.Tab>
+    ### ROUGE Score
+    
+    Recall-Oriented Understudy for Gisting Evaluation.
+    
+    ```python
+    from rouge_score import rouge_scorer
+    
+    scorer = rouge_scorer.RougeScorer(['rouge1', 'rougeL'])
+    
+    reference = "The cat is on the mat"
+    candidate = "A cat sits on the mat"
+    
+    scores = scorer.score(reference, candidate)
+    # ROUGE-1: unigram overlap
+    # ROUGE-L: longest common subsequence
+    ```
+    
+    **Pros**: Better for summaries  
+    **Cons**: Still lexical matching
+  </Tabs.Tab>
+  
+  <Tabs.Tab>
+    ### BERTScore
+    
+    Semantic similarity using BERT embeddings.
+    
+    ```python
+    from bert_score import score
+    
+    reference = ["The cat is on the mat"]
+    candidate = ["A feline is sitting on the mat"]
+    
+    p, r, f1 = score(candidate, reference, lang="en")
+    # Considers semantic meaning, not just words
+    ```
+    
+    **Pros**: Captures semantic similarity  
+    **Cons**: Slower, requires GPU
+  </Tabs.Tab>
+</Tabs>
+
+## Building an Evaluation Suite
+
+<Steps>
+### Create Test Dataset
+
+```python
+# Curate quality test cases
+test_set = [
+    {
+        "query": "What is RAG?",
+        "expected_answer": "Retrieval-Augmented Generation is...",
+        "relevant_docs": ["doc1", "doc3"],
+        "category": "definition"
+    },
+    {
+        "query": "How does RAG improve accuracy?",
+        "expected_answer": "RAG reduces hallucinations by...",
+        "relevant_docs": ["doc2", "doc4"],
+        "category": "how-it-works"
+    }
+]
+```
+
+### Define Evaluation Criteria
+
+```python
+criteria = {
+    "context_relevance": {
+        "weight": 0.2,
+        "target": 0.8,
+        "method": "llm_evaluate"
+    },
+    "retrieval_recall": {
+        "weight": 0.2,
+        "target": 0.7,
+        "method": "metric_recall"
+    },
+    "answer_relevance": {
+        "weight": 0.3,
+        "target": 0.9,
+        "method": "llm_evaluate"
+    },
+    "faithfulness": {
+        "weight": 0.3,
+        "target": 0.85,
+        "method": "llm_evaluate"
+    }
+}
+```
+
+### Implement Evaluation Function
+
+```python
+def evaluate_rag_system(test_set, criteria):
+    results = []
+    
+    for test in test_set:
+        # Get RAG response
+        response = rag.query(test["query"])
+        retrieved = response["source_documents"]
+        answer = response["answer"]
+        
+        # Evaluate each criterion
+        scores = {}
+        for criterion, config in criteria.items():
+            score = config["method"](
+                test,
+                response,
+                retrieved
+            )
+            scores[criterion] = score
+        
+        # Calculate weighted score
+        weighted = sum(
+            scores[c] * criteria[c]["weight"]
+            for c in criteria
+        )
+        
+        results.append({
+            "query": test["query"],
+            "scores": scores,
+            "weighted_score": weighted,
+            "answer": answer
+        })
+    
+    return results
+```
+
+### Analyze Results
+
+```python
+# Aggregate scores
+avg_scores = {}
+for criterion in criteria:
+    scores = [r["scores"][criterion] for r in results]
+    avg = sum(scores) / len(scores)
+    target = criteria[criterion]["target"]
+    
+    print(f"{criterion}: {avg:.3f} (target: {target:.3f})")
+    
+    if avg < target:
+        print(f"  ⚠️ Below target")
+```
+
+### Identify Failure Cases
+
+```python
+# Find worst performing queries
+failures = sorted(
+    results,
+    key=lambda x: x["weighted_score"]
+)[:5]
+
+for failure in failures:
+    print(f"Query: {failure['query']}")
+    print(f"Score: {failure['weighted_score']:.3f}")
+    print(f"Issue: {analyze_failure(failure)}")
+```
+
+### Iterate
+
+Based on failures, improve:
+- Retrieval quality
+- Prompt engineering
+- Document preprocessing
+- Model selection
+</Steps>
+
+## Continuous Evaluation
+
+### 1. Production Monitoring
+
+```python
+def log_evaluation(query, response):
+    """Log response for later evaluation"""
+    event = {
+        "timestamp": now(),
+        "query": query,
+        "answer": response["answer"],
+        "sources": response["sources"],
+        "latency": response["latency"],
+        "model": response["model"]
+    }
+    
+    database.log_event(event)
+```
+
+### 2. Batch Evaluation
+
+```python
+# Periodically evaluate recent queries
+recent_queries = database.get_queries(
+    since=24.hours_ago
+)
+
+scores = evaluate_rag_system(
+    recent_queries,
+    criteria
+)
+
+# Alert if metrics drop
+if avg_score < threshold:
+    send_alert(f"RAG quality dropped to {avg_score}")
+```
+
+### 3. Comparative Testing
+
+```python
+# Compare models/approaches
+variants = {
+    "baseline": old_rag_system,
+    "new_model": updated_rag_system,
+    "with_reranking": rag_with_reranker
+}
+
+for name, system in variants.items():
+    results = evaluate_rag_system(test_set, system)
+    print(f"{name}: {avg_score(results):.3f}")
+```
+
+## Evaluation Benchmarks
+
+<Callout type="info">
+Common target ranges for RAG systems:
+- **Retrieval Recall**: 0.7-0.9 (depends on acceptable missing docs)
+- **Answer Relevance**: 0.85-0.95 (strict requirement)
+- **Faithfulness**: 0.80-0.95 (no hallucinations)
+- **Context Relevance**: 0.75-0.90 (good retrieval)
+- **Latency**: < 2 seconds (typical requirement)
+</Callout>
+
+## Tools and Frameworks
+
+Popular libraries for RAG evaluation:
+
+```python
+# RAGAS - RAG Assessment
+from ragas.metrics import (
+    context_precision,
+    context_recall,
+    faithfulness,
+    answer_relevance
+)
+
+# TruLens - LLM evaluation
+from trulens_eval import Tru
+
+# DeepEval - LLM testing
+from deepeval.metrics import AnswerRelevancy
+
+# LangChain Evaluators
+from langchain.evaluation import EvaluatorChain
+```
+
+Start with RAGAS—it's designed specifically for RAG systems.

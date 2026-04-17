@@ -1,0 +1,79 @@
+import { Callout } from 'nextra/components'
+
+# What is RAG (Retrieval-Augmented Generation)?
+
+Retrieval-Augmented Generation (RAG) is a powerful technique that combines information retrieval with generative AI models to create more accurate, contextually relevant, and up-to-date responses.
+
+## The Problem RAG Solves
+
+Traditional language models have several limitations:
+
+- **Knowledge Cutoff**: Trained only on data up to a specific date
+- **Hallucinations**: May generate plausible-sounding but incorrect information
+- **Lack of Context**: Cannot easily access domain-specific or proprietary information
+- **Static Knowledge**: Cannot be updated without retraining
+
+## How RAG Works
+
+RAG bridges these gaps by:
+
+1. **Retrieving** relevant documents/passages from a knowledge base
+2. **Augmenting** the AI prompt with this retrieved context
+3. **Generating** responses based on both the context and the original query
+
+```
+User Query
+    ↓
+[Retrieval System] → Find relevant documents
+    ↓
+Combine Query + Retrieved Context
+    ↓
+[Language Model] → Generate response
+    ↓
+Response with Citations
+```
+
+## Key Benefits
+
+| Benefit | Description |
+|---------|-------------|
+| **Accuracy** | Ground responses in actual documents, reducing hallucinations |
+| **Freshness** | Keep knowledge current by updating the document database |
+| **Traceability** | Cite sources for every claim in the response |
+| **Domain-Specific** | Work with proprietary or specialized knowledge bases |
+| **Cost-Effective** | Use smaller models with RAG instead of larger ones |
+| **Transparency** | Users see which documents informed the answer |
+
+## Real-World Applications
+
+- **Customer Support**: Answer questions using company documentation
+- **Research Assistance**: Summarize findings from academic papers
+- **Medical Diagnosis**: Reference medical literature with patient queries
+- **Legal Services**: Retrieve and cite relevant statutes and case law
+- **Product Documentation**: Generate answers from technical manuals
+- **Enterprise Q&A**: Answer questions about company policies and procedures
+
+## Core Components
+
+A RAG system typically consists of three main parts:
+
+1. **Knowledge Base**: Collection of documents/vectors to retrieve from
+2. **Retrieval Engine**: Finds relevant documents matching the query
+3. **Generation Model**: Creates responses using retrieved context
+
+## When to Use RAG
+
+Use RAG when you need:
+- Answers grounded in specific documents
+- Access to frequently updated information
+- Traceability and source citations
+- Domain-specific knowledge
+- Reduced hallucinations
+
+<Callout type="info">
+RAG is not a replacement for fine-tuning, but a complementary technique that can be used together with fine-tuning for optimal results.
+</Callout>
+
+## Next Steps
+
+Explore the RAG architecture, learn about retrieval systems, and see implementation examples in the following sections.
