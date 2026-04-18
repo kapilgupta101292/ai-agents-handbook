@@ -15,7 +15,7 @@ export const metadata: Metadata = {
 const navbar = (
   <Navbar
     logo={<b>AI Agents Handbook</b>}
-    projectLink="https://github.com/yourusername/ai-agents-handbook"
+    projectLink="https://github.com/kapilgupta101292/ai-agents-handbook"
   />
 )
 
@@ -34,7 +34,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           navbar={navbar}
           footer={footer}
           pageMap={await getPageMap()}
-          docsRepositoryBase="https://github.com/yourusername/ai-agents-handbook"
+          docsRepositoryBase="https://github.com/kapilgupta101292/ai-agents-handbook"
           sidebar={{ defaultMenuCollapseLevel: 1 }}
         >
           {children}
